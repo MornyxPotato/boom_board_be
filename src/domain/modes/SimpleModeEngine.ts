@@ -46,7 +46,8 @@ export interface PlayerModel {
 
 export interface ExplosionResult {
     bomberName: string;
-    victimName: string;
+    victimName?: string;
+    isHit: boolean;
     x: number;
     y: number;
 }
@@ -173,9 +174,13 @@ class SimpleModeEngine {
                 y: target.y
             } as BombExplodedData);
 
+            let didHit = false;
+
             this.players.forEach(victim => {
                 if (bomber.id !== victim.id && victim.isAlive && victim.hasPositioned && victim.x !== null && victim.y !== null) {
                     if (this.board.isDirectHit(target.x, target.y, victim.x, victim.y)) {
+                        didHit = true;
+
                         victim.eliminate(++this.deathCounter);
 
                         this.addLog('PLAYER_ELIMINATED', {
@@ -186,12 +191,22 @@ class SimpleModeEngine {
                         roundResults.push({
                             bomberName: bomber.name,
                             victimName: victim.name,
+                            isHit: true,
                             x: target.x,
                             y: target.y
                         });
                     }
                 }
             });
+
+            if (!didHit) {
+                roundResults.push({
+                    bomberName: bomber.name,
+                    x: target.x,
+                    y: target.y,
+                    isHit: false
+                });
+            }
         }
 
         const livingPlayers = this.players.filter(p => p.isAlive);
