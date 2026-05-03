@@ -115,6 +115,9 @@ export default (io: Server, socket: Socket) => {
                 case 'ROOM_IS_FULL':
                     if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'ROOM_IS_FULL', data: 'Room has reached max capacity' }));
                     break;
+                case 'PLAYER_ALREADY_IN_ROOM':
+                    if (callback) callback(ResponseUtil.error({ code: 409, errorType: 'PLAYER_ALREADY_IN_ROOM', data: 'You are already in this room' }));
+                    break;
                 default:
                     if (callback) callback(ResponseUtil.error({ code: 500, errorType: 'UNKNOWN_ERROR', data: 'Cannot join room' }));
             }

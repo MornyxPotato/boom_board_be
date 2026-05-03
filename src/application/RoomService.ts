@@ -2,7 +2,7 @@ import PlayerEntity from '../domain/models/PlayerEntity';
 import SimpleModeEngine, { ActionLog, PlayerModel } from '../domain/modes/SimpleModeEngine';
 import { GameMode, Room, activeRooms, socketTracker } from './RoomStore';
 
-export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL';
+export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL' | 'PLAYER_ALREADY_IN_ROOM';
 export type CreateRoomErrorType = 'SERVER_CAPACITY_REACHED' | 'INVALID_MODE';
 export type DisconnectErrorType = 'PLAYER_IS_NOT_IN_A_ROOM' | 'ROOM_NOT_FOUND' | 'PLAYER_NOT_FOUND';
 export type UnknownErrorType = 'UNKNOWN_ERROR';
@@ -82,6 +82,10 @@ class RoomService {
             const room = activeRooms[roomCode];
             if (!room) return { success: false, error: 'ROOM_NOT_FOUND' };
             if (room.state !== 'lobby') return { success: false, error: 'GAME_ALREADY_STARTED' };
+
+            if (room.game.players.some(p => p.id === playerId)) {
+                return { success: false, error: 'PLAYER_ALREADY_IN_ROOM' };
+            }
 
             const newPlayer = new PlayerEntity(playerId, playerName);
             if (!room.game.addPlayer(newPlayer)) return { success: false, error: 'ROOM_IS_FULL' };
