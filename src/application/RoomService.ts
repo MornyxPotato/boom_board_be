@@ -28,6 +28,7 @@ export interface DisconnectResultData {
     roomCode?: string;
     room?: Room;
     newLog?: ActionLog;
+    playerId?: string;
 }
 
 class RoomService {
@@ -132,10 +133,10 @@ class RoomService {
 
             const disconnectLog = room.game.addLog('PLAYER_DISCONNECTED', { playerName: player.name });
 
-            return { success: true, data: { action: resultAction, roomCode, room, newLog: disconnectLog } };
+            return { success: true, data: { action: resultAction, roomCode, room, newLog: disconnectLog, playerId: socketId } };
         }
 
-        return { success: true, data: { action: resultAction, roomCode, room } };
+        return { success: true, data: { action: resultAction, roomCode, room, playerId: socketId } };
     }
 
     // Returns either a Room object, or 'undefined' if it doesn't exist

@@ -10,11 +10,12 @@ export default (io: Server, socket: Socket) => {
     const broadcastPlayerRemoval = (result: DisconnectResultData) => {
         if (!result || result.action === 'DELETE_ROOM' || !result.roomCode || !result.room) return;
 
-        const { roomCode, room, action } = result;
+        const { roomCode, room, action, playerId } = result;
 
         if (action === 'PLAYER_LEFT') {
             io.to(roomCode).emit('playerLeft', ResponseUtil.success({
                 data: {
+                    leftPlayerId: playerId,
                     players: room.game.getPlayersList(),
                     newHostId: room.hostId
                 },
@@ -23,6 +24,7 @@ export default (io: Server, socket: Socket) => {
         else if (action === 'REMOVE_PLAYER_MIDGAME') {
             io.to(roomCode).emit('playerDropped', ResponseUtil.success({
                 data: {
+                    droppedPlayerId: playerId,
                     players: room.game.getPlayersList(),
                     newLogs: result.newLog ? [result.newLog] : null
                 },
@@ -90,6 +92,7 @@ export default (io: Server, socket: Socket) => {
 
             socket.to(roomCode).emit('playerJoined', ResponseUtil.success({
                 data: {
+                    id: socket.id,
                     name: data.playerName,
                     players: result.data.players
                 }
