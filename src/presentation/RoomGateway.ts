@@ -26,6 +26,7 @@ export default (io: Server, socket: Socket) => {
                 data: {
                     droppedPlayerId: playerId,
                     players: room.game.getPlayersList(),
+                    newHostId: room.hostId,
                     newLogs: result.newLog ? [result.newLog] : null
                 },
             }));

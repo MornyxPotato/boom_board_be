@@ -129,6 +129,15 @@ class RoomService {
         } else {
             const player = room.game.players[playerIndex];
             player.eliminate(++room.game.deathCounter, true);
+
+            if (room.hostId === socketId) {
+                // Find the first player who is NOT disconnected
+                const newHost = room.game.players.find(p => !p.isDisconnected && p.id !== socketId);
+                if (newHost) {
+                    room.hostId = newHost.id;
+                }
+            }
+
             resultAction = 'REMOVE_PLAYER_MIDGAME';
 
             const disconnectLog = room.game.addLog('PLAYER_DISCONNECTED', { playerName: player.name });
