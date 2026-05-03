@@ -92,12 +92,11 @@ class GameService {
         if (livingPlayers.length <= 1) {
             // SCENARIO A: GAME OVER
             // We use the same delay so the final explosion plays out before the Victory screen pops up!
-            const winnerName = livingPlayers.length === 1 ? livingPlayers[0].name : 'Draw';
 
             room.processTimer = setTimeout(() => {
                 room.state = 'end';
                 this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
-                    data: { winner: winnerName, ranking: room.game.getRanking() }
+                    data: { ranking: room.game.getRanking() }
                 }));
             }, totalDelayMs);
 
@@ -121,10 +120,9 @@ class GameService {
             if (room.processTimer) clearTimeout(room.processTimer);
 
             room.state = 'end';
-            const winnerName = livingPlayers.length === 1 ? livingPlayers[0].name : 'Draw';
 
             this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
-                data: { winner: winnerName, ranking: room.game.getRanking() }
+                data: { ranking: room.game.getRanking() }
             }));
             return;
         }
