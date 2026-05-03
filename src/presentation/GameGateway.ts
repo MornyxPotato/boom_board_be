@@ -28,6 +28,11 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
+        if (room.game.players.length < 2) {
+            if (callback) callback(ResponseUtil.error({ code: 400, errorType: 'NOT_ENOUGH_PLAYERS', data: 'Need at least 2 players to start the game' }));
+            return;
+        }
+
         GameService.startPositionPhase(roomCode);
 
         if (callback) callback(ResponseUtil.success());
