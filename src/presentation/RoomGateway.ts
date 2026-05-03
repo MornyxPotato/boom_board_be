@@ -54,6 +54,7 @@ export default (io: Server, socket: Socket) => {
                 callback(ResponseUtil.success({
                     data: {
                         roomCode: result.data.roomCode,
+                        gameMode: mode,
                         players: result.data.players
                     }
                 }));
@@ -86,6 +87,7 @@ export default (io: Server, socket: Socket) => {
                 callback(ResponseUtil.success({
                     data: {
                         roomCode: roomCode,
+                        gameMode: result.data.gameMode,
                         players: result.data.players
                     }
                 }));

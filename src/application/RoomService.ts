@@ -1,6 +1,6 @@
 import PlayerEntity from '../domain/models/PlayerEntity';
 import SimpleModeEngine, { ActionLog, PlayerModel } from '../domain/modes/SimpleModeEngine';
-import { Room, activeRooms, socketTracker } from './RoomStore';
+import { GameMode, Room, activeRooms, socketTracker } from './RoomStore';
 
 export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL';
 export type CreateRoomErrorType = 'SERVER_CAPACITY_REACHED' | 'INVALID_MODE';
@@ -21,6 +21,7 @@ export interface CreateRoomResultData {
 export interface JoinRoomResultData {
     roomCode?: string;
     players?: PlayerModel[];
+    gameMode?: GameMode;
 }
 
 export interface DisconnectResultData {
@@ -53,6 +54,7 @@ class RoomService {
                 code: roomCode,
                 hostId: hostId,
                 game: gameInstance,
+                gameMode: modeType,
                 state: 'lobby',
                 phaseTimer: null,
                 processTimer: null
@@ -83,7 +85,7 @@ class RoomService {
 
             socketTracker[playerId] = roomCode;
 
-            return { success: true, data: { roomCode, players: room.game.getPlayersList() } };
+            return { success: true, data: { roomCode, players: room.game.getPlayersList(), gameMode: room.gameMode } };
         } catch (error) {
             if (error instanceof Error) {
                 console.error(`joinRoom error: ${error.message}`);
