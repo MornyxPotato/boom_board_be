@@ -54,8 +54,9 @@ export default (io: Server, socket: Socket) => {
                 callback(ResponseUtil.success({
                     data: {
                         roomCode: result.data.roomCode,
-                        gameMode: mode,
-                        players: result.data.players
+                        gameMode: result.data.gameMode,
+                        players: result.data.players,
+                        hostId: result.data.hostId,
                     }
                 }));
             }
@@ -88,6 +89,7 @@ export default (io: Server, socket: Socket) => {
                     data: {
                         roomCode: roomCode,
                         gameMode: result.data.gameMode,
+                        hostId: result.data.hostId,
                         players: result.data.players
                     }
                 }));
@@ -97,6 +99,7 @@ export default (io: Server, socket: Socket) => {
                 data: {
                     id: socket.id,
                     name: data.playerName,
+                    hostId: result.data.hostId,
                     players: result.data.players
                 }
             }));

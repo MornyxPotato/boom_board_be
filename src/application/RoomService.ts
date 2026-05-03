@@ -16,12 +16,15 @@ export interface RoomResult<TData = any, TError = string> {
 export interface CreateRoomResultData {
     roomCode?: string;
     players?: PlayerModel[];
+    gameMode?: GameMode;
+    hostId?: string;
 }
 
 export interface JoinRoomResultData {
     roomCode?: string;
     players?: PlayerModel[];
     gameMode?: GameMode;
+    hostId?: string;
 }
 
 export interface DisconnectResultData {
@@ -34,9 +37,9 @@ export interface DisconnectResultData {
 
 class RoomService {
 
-    static createRoom(hostId: string, playerName: string, modeType: string = 'simple'): RoomResult<CreateRoomResultData, CreateRoomErrorType> {
+    static createRoom(hostId: string, playerName: string, gameMode: string = 'simple'): RoomResult<CreateRoomResultData, CreateRoomErrorType> {
         try {
-            if (modeType != 'simple') {
+            if (gameMode != 'simple') {
                 return { success: false, error: 'INVALID_MODE' };
             }
 
@@ -54,7 +57,7 @@ class RoomService {
                 code: roomCode,
                 hostId: hostId,
                 game: gameInstance,
-                gameMode: modeType,
+                gameMode: gameMode,
                 state: 'lobby',
                 phaseTimer: null,
                 processTimer: null
@@ -62,7 +65,7 @@ class RoomService {
 
             socketTracker[hostId] = roomCode;
 
-            return { success: true, data: { roomCode, players: gameInstance.getPlayersList() } };
+            return { success: true, data: { roomCode, players: gameInstance.getPlayersList(), gameMode, hostId } };
         } catch (error) {
             if (error instanceof Error) {
                 console.error(`createRoom error: ${error.message}`);
@@ -85,7 +88,7 @@ class RoomService {
 
             socketTracker[playerId] = roomCode;
 
-            return { success: true, data: { roomCode, players: room.game.getPlayersList(), gameMode: room.gameMode } };
+            return { success: true, data: { roomCode, players: room.game.getPlayersList(), gameMode: room.gameMode, hostId: room.hostId } };
         } catch (error) {
             if (error instanceof Error) {
                 console.error(`joinRoom error: ${error.message}`);
