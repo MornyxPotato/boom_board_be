@@ -77,7 +77,7 @@ export default (io: Server, socket: Socket) => {
         if (callback) callback(ResponseUtil.success());
 
         if (result.data?.event === 'PLAYER_READY') {
-            socket.to(roomCode).emit('playerReady', ResponseUtil.success());
+            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id } }));
         }
     });
 
@@ -114,7 +114,7 @@ export default (io: Server, socket: Socket) => {
         if (callback) callback(ResponseUtil.success());
 
         if (result.data?.event === 'PLAYER_READY') {
-            socket.to(roomCode).emit('playerReady', ResponseUtil.success());
+            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id } }));
         }
     });
 
