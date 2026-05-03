@@ -38,6 +38,7 @@ export interface ActionLog<T = any> {
 }
 
 export interface PlayerModel {
+    id: string;
     name: string;
     isAlive: boolean;
     hasPositioned: boolean;
@@ -96,6 +97,7 @@ class SimpleModeEngine {
 
     getPlayersList(): PlayerModel[] {
         return this.players.map(p => ({
+            id: p.id,
             name: p.name,
             isAlive: p.isAlive,
             hasPositioned: p.hasPositioned,
