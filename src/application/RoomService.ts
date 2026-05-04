@@ -58,7 +58,6 @@ class RoomService {
                 hostId: hostId,
                 game: gameInstance,
                 gameMode: gameMode,
-                state: 'lobby',
                 phaseTimer: null,
                 processTimer: null
             };
@@ -81,7 +80,7 @@ class RoomService {
         try {
             const room = activeRooms[roomCode];
             if (!room) return { success: false, error: 'ROOM_NOT_FOUND' };
-            if (room.state !== 'lobby') return { success: false, error: 'GAME_ALREADY_STARTED' };
+            if (room.game.state !== 'lobby') return { success: false, error: 'GAME_ALREADY_STARTED' };
 
             if (room.game.players.some(p => p.id === playerId)) {
                 return { success: false, error: 'PLAYER_ALREADY_IN_ROOM' };
@@ -120,7 +119,7 @@ class RoomService {
 
         let resultAction: DisconnectResultData['action'];
 
-        if (room.state === 'lobby') {
+        if (room.game.state === 'lobby') {
             room.game.players.splice(playerIndex, 1);
 
             if (room.game.players.length === 0) {
