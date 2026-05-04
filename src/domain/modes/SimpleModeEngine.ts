@@ -21,8 +21,8 @@ export interface BombExplodedData {
 
 // The Data Payloads for history log
 export interface PlayerEliminatedData {
-    killerName: string;
-    killerId: string;
+    bomberName: string;
+    bomberId: string;
     victimName: string;
     victimId: string;
 }
@@ -191,8 +191,8 @@ class SimpleModeEngine {
                         victim.eliminate(++this.deathCounter);
 
                         this.addLog('PLAYER_ELIMINATED', {
-                            killerName: bomber.name,
-                            killerId: bomber.id,
+                            bomberName: bomber.name,
+                            bomberId: bomber.id,
                             victimName: victim.name,
                             victimId: victim.id,
                         } as PlayerEliminatedData);
