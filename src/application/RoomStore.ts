@@ -8,7 +8,6 @@ export interface Room {
     hostId: string;
     game: SimpleModeEngine;
     gameMode: GameMode;
-    state: RoomState;
     phaseTimer: NodeJS.Timeout | null;
     processTimer: NodeJS.Timeout | null;
 }

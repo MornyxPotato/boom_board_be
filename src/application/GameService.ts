@@ -27,7 +27,7 @@ class GameService {
         const room = activeRooms[roomCode];
         if (!room) return;
 
-        room.state = 'position';
+        room.game.state = 'position';
 
         // Start the 30-second Clock
         room.phaseTimer = setTimeout(() => {
@@ -46,7 +46,7 @@ class GameService {
         const room = activeRooms[roomCode];
         if (!room) return;
 
-        room.state = 'attack';
+        room.game.state = 'attack';
 
         // 📢 MEGAPHONE: The server is changing the phase on its own
         this.io.to(roomCode).emit('phaseChanged', ResponseUtil.success({
@@ -62,7 +62,7 @@ class GameService {
         const room = activeRooms[roomCode];
         if (!room) return;
 
-        room.state = 'process';
+        room.game.state = 'process';
 
         // Math happens instantly
         const explosionResults = room.game.resolveRound();
@@ -94,7 +94,7 @@ class GameService {
             // We use the same delay so the final explosion plays out before the Victory screen pops up!
 
             room.processTimer = setTimeout(() => {
-                room.state = 'end';
+                room.game.state = 'end';
                 this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
                     data: { ranking: room.game.getRanking() }
                 }));
@@ -115,11 +115,11 @@ class GameService {
 
         // Did that player leaving end the game?
         const livingPlayers = room.game.players.filter(p => p.isAlive);
-        if (livingPlayers.length <= 1 && room.state !== 'end' && room.state !== 'lobby') {
+        if (livingPlayers.length <= 1 && room.game.state !== 'end' && room.game.state !== 'lobby') {
             if (room.phaseTimer) clearTimeout(room.phaseTimer);
             if (room.processTimer) clearTimeout(room.processTimer);
 
-            room.state = 'end';
+            room.game.state = 'end';
 
             this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
                 data: { ranking: room.game.getRanking() }
@@ -128,13 +128,13 @@ class GameService {
         }
 
         // Did that player leaving mean everyone else is ready to attack?
-        if (room.state === 'position' && room.game.haveAllPlayersPositioned()) {
+        if (room.game.state === 'position' && room.game.haveAllPlayersPositioned()) {
             if (room.phaseTimer) clearTimeout(room.phaseTimer);
             this.startAttackPhase(roomCode);
         }
 
         // Did that player leaving mean everyone else has thrown their bombs?
-        else if (room.state === 'attack' && room.game.haveAllLivingPlayersThrown()) {
+        else if (room.game.state === 'attack' && room.game.haveAllLivingPlayersThrown()) {
             if (room.phaseTimer) clearTimeout(room.phaseTimer);
             this.processRound(roomCode);
         }
@@ -179,10 +179,10 @@ class GameService {
         const room = activeRooms[roomCode];
         if (!room) return { success: false, error: 'ROOM_NOT_FOUND' };
 
-        if (room.state !== 'end') return { success: false, error: 'WRONG_PHASE' };
+        if (room.game.state !== 'end') return { success: false, error: 'WRONG_PHASE' };
 
         // Reset the Server Room state
-        room.state = 'lobby';
+        room.game.state = 'lobby';
 
         // Clear any lingering timers as a safety precaution
         if (room.phaseTimer) clearTimeout(room.phaseTimer);
