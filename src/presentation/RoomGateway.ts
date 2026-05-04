@@ -61,11 +61,15 @@ export default (io: Server, socket: Socket) => {
                 }));
             }
         } else {
-            if (callback) callback(ResponseUtil.error({
-                code: 500,
-                errorType: result.error || 'UNKNOWN_ERROR',
-                data: 'Failed to create room'
-            }));
+            if (result.error === 'INVALID_PLAYER_NAME') {
+                if (callback) callback(ResponseUtil.error({ code: 400, errorType: 'INVALID_PLAYER_NAME', data: 'Name must be 1-20 characters' }));
+            } else {
+                if (callback) callback(ResponseUtil.error({
+                    code: 500,
+                    errorType: result.error || 'UNKNOWN_ERROR',
+                    data: 'Failed to create room'
+                }));
+            }
         }
     });
 
@@ -117,6 +121,9 @@ export default (io: Server, socket: Socket) => {
                     break;
                 case 'PLAYER_ALREADY_IN_ROOM':
                     if (callback) callback(ResponseUtil.error({ code: 409, errorType: 'PLAYER_ALREADY_IN_ROOM', data: 'You are already in this room' }));
+                    break;
+                case 'INVALID_PLAYER_NAME':
+                    if (callback) callback(ResponseUtil.error({ code: 400, errorType: 'INVALID_PLAYER_NAME', data: 'Name must be 1-20 characters' }));
                     break;
                 default:
                     if (callback) callback(ResponseUtil.error({ code: 500, errorType: 'UNKNOWN_ERROR', data: 'Cannot join room' }));

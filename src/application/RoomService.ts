@@ -2,8 +2,8 @@ import PlayerEntity from '../domain/models/PlayerEntity';
 import SimpleModeEngine, { ActionLog, PlayerDisconnectedData, PlayerModel } from '../domain/modes/SimpleModeEngine';
 import { GameMode, Room, activeRooms, socketTracker } from './RoomStore';
 
-export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL' | 'PLAYER_ALREADY_IN_ROOM';
-export type CreateRoomErrorType = 'SERVER_CAPACITY_REACHED' | 'INVALID_MODE';
+export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL' | 'PLAYER_ALREADY_IN_ROOM' | 'INVALID_PLAYER_NAME';
+export type CreateRoomErrorType = 'SERVER_CAPACITY_REACHED' | 'INVALID_MODE' | 'INVALID_PLAYER_NAME';
 export type DisconnectErrorType = 'PLAYER_IS_NOT_IN_A_ROOM' | 'ROOM_NOT_FOUND' | 'PLAYER_NOT_FOUND';
 export type UnknownErrorType = 'UNKNOWN_ERROR';
 
@@ -35,10 +35,23 @@ export interface DisconnectResultData {
     playerId?: string;
 }
 
+const textSegmenter = new Intl.Segmenter('th-TH', { granularity: 'grapheme' });
+
+// Helper function to get true visual length
+const getVisualLength = (text: string): number => {
+    return [...textSegmenter.segment(text)].length;
+};
+
 class RoomService {
 
     static createRoom(hostId: string, playerName: string, gameMode: string = 'simple'): RoomResult<CreateRoomResultData, CreateRoomErrorType> {
         try {
+            const trimmedName = playerName ? playerName.trim() : '';
+
+            if (!trimmedName || trimmedName.length === 0 || getVisualLength(trimmedName) > 20) {
+                return { success: false, error: 'INVALID_PLAYER_NAME' };
+            }
+
             if (gameMode != 'simple') {
                 return { success: false, error: 'INVALID_MODE' };
             }
@@ -78,6 +91,12 @@ class RoomService {
 
     static joinRoom(roomCode: string, playerId: string, playerName: string): RoomResult<JoinRoomResultData, JoinRoomErrorType> {
         try {
+            const trimmedName = playerName ? playerName.trim() : '';
+
+            if (!trimmedName || trimmedName.length === 0 || getVisualLength(trimmedName) > 20) {
+                return { success: false, error: 'INVALID_PLAYER_NAME' };
+            }
+
             const room = activeRooms[roomCode];
             if (!room) return { success: false, error: 'ROOM_NOT_FOUND' };
             if (room.game.state !== 'lobby') return { success: false, error: 'GAME_ALREADY_STARTED' };
