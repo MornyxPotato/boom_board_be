@@ -13,6 +13,7 @@ export interface OrbitalLaserData {
 
 // The Data Payloads for history log
 export interface BombExplodedData {
+    bomberId: string;
     bomberName: string;
     x: number;
     y: number;
@@ -21,11 +22,14 @@ export interface BombExplodedData {
 // The Data Payloads for history log
 export interface PlayerEliminatedData {
     killerName: string;
+    killerId: string;
     victimName: string;
+    victimId: string;
 }
 
 // The Data Payloads for history log
 export interface PlayerDisconnectedData {
+    playerId: string;
     playerName: string;
 }
 
@@ -46,8 +50,8 @@ export interface PlayerModel {
 }
 
 export interface ExplosionResult {
-    bomberName: string;
-    victimName?: string;
+    bomberId: string;
+    victimId?: string;
     isHit: boolean;
     x: number;
     y: number;
@@ -171,6 +175,7 @@ class SimpleModeEngine {
             const target = bomber.bombTarget;
 
             this.addLog('BOMB_EXPLODED', {
+                bomberId: bomber.id,
                 bomberName: bomber.name,
                 x: target.x,
                 y: target.y
@@ -187,12 +192,14 @@ class SimpleModeEngine {
 
                         this.addLog('PLAYER_ELIMINATED', {
                             killerName: bomber.name,
-                            victimName: victim.name
+                            killerId: bomber.id,
+                            victimName: victim.name,
+                            victimId: victim.id,
                         } as PlayerEliminatedData);
 
                         roundResults.push({
-                            bomberName: bomber.name,
-                            victimName: victim.name,
+                            bomberId: bomber.id,
+                            victimId: victim.id,
                             isHit: true,
                             x: target.x,
                             y: target.y
@@ -203,7 +210,7 @@ class SimpleModeEngine {
 
             if (!didHit) {
                 roundResults.push({
-                    bomberName: bomber.name,
+                    bomberId: bomber.id,
                     x: target.x,
                     y: target.y,
                     isHit: false

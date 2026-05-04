@@ -1,5 +1,5 @@
 import PlayerEntity from '../domain/models/PlayerEntity';
-import SimpleModeEngine, { ActionLog, PlayerModel } from '../domain/modes/SimpleModeEngine';
+import SimpleModeEngine, { ActionLog, PlayerDisconnectedData, PlayerModel } from '../domain/modes/SimpleModeEngine';
 import { GameMode, Room, activeRooms, socketTracker } from './RoomStore';
 
 export type JoinRoomErrorType = 'ROOM_NOT_FOUND' | 'GAME_ALREADY_STARTED' | 'ROOM_IS_FULL' | 'PLAYER_ALREADY_IN_ROOM';
@@ -148,7 +148,7 @@ class RoomService {
 
             resultAction = 'REMOVE_PLAYER_MIDGAME';
 
-            const disconnectLog = room.game.addLog('PLAYER_DISCONNECTED', { playerName: player.name });
+            const disconnectLog = room.game.addLog('PLAYER_DISCONNECTED', { playerName: player.name, playerId: player.id, } as PlayerDisconnectedData);
 
             return { success: true, data: { action: resultAction, roomCode, room, newLog: disconnectLog, playerId: socketId } };
         }
