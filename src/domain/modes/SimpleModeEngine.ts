@@ -335,8 +335,10 @@ class SimpleModeEngine {
 
         return sortedPlayers.map((p, index) => ({
             rank: index + 1,
+            id: p.id,
             name: p.name,
-            isAlive: p.isAlive
+            isAlive: p.isAlive,
+            isDisconnected: p.isDisconnected,
         }));
     }
 }
