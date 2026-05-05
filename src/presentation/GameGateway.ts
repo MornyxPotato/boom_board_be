@@ -116,10 +116,10 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
-        if (callback) callback(ResponseUtil.success());
+        if (callback) callback(ResponseUtil.success({ data: { throwOrder: result.data?.throwOrder } }));
 
         if (result.data?.event === 'PLAYER_READY') {
-            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id } }));
+            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id, throwOrder: result.data?.throwOrder } }));
         }
     });
 

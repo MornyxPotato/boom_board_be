@@ -47,6 +47,7 @@ export interface PlayerModel {
     isAlive: boolean;
     hasPositioned: boolean;
     isDisconnected: boolean;
+    throwOrder: number | null;
 }
 
 export interface ExplosionResult {
@@ -71,6 +72,7 @@ export interface EngineResult<TData = any, TError = string> {
 
 export interface EngineEventData {
     event: EngineEventType;
+    throwOrder?: number | null;
 }
 
 class SimpleModeEngine {
@@ -105,7 +107,8 @@ class SimpleModeEngine {
             name: p.name,
             isAlive: p.isAlive,
             hasPositioned: p.hasPositioned,
-            isDisconnected: p.isDisconnected
+            isDisconnected: p.isDisconnected,
+            throwOrder: p.throwOrder,
         }));
     }
 
@@ -304,7 +307,7 @@ class SimpleModeEngine {
         if (isScorched) return { success: false, error: 'TILE_ALREADY_DESTROYED' };
 
         player.setBombTarget(targetX, targetY, this.currentThrowOrder++);
-        return { success: true, data: { event: 'PLAYER_READY' } };
+        return { success: true, data: { event: 'PLAYER_READY', throwOrder: player.throwOrder } };
     }
 
     resetGame(): EngineResult {
