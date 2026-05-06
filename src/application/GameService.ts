@@ -1,4 +1,5 @@
 import { SetPositionErrorType, SetBombErrorType, EngineEventData } from '../domain/modes/SimpleModeEngine';
+import logger from '../utils/Logger';
 import ResponseUtil from '../utils/ResponseUtil';
 import { activeRooms } from './RoomStore';
 import { Server } from 'socket.io';
@@ -65,20 +66,21 @@ class GameService {
         room.game.state = 'process';
 
         // Math happens instantly
-        const explosionResults = room.game.resolveRound();
+        const { explosions: explosionResults, newDestroyedTiles } = room.game.resolveRound();
         const newLogs = room.game.roundLogs;
 
         // Broadcast EVERYTHING to Flutter
         this.io.to(roomCode).emit('roundResolved', ResponseUtil.success({
             data: {
                 explosions: explosionResults,
+                newDestroyedTiles: newDestroyedTiles,
                 remainingPlayers: room.game.getPlayersList(),
                 destroyedTiles: room.game.destroyedTiles,
                 newLogs: newLogs,
             }
         }));
 
-        const didLaserFire = newLogs.some(log => log.type === 'ORBITAL_LASER_FIRED');
+        const didLaserFire = newDestroyedTiles.length > 0;
 
         const baseBufferMs = 2000;
         const animationMs = explosionResults.length * 1500;

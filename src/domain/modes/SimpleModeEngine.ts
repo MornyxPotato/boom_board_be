@@ -1,3 +1,4 @@
+import logger from '../../utils/Logger';
 import Board from '../models/Board';
 import PlayerEntity from '../models/PlayerEntity';
 
@@ -153,7 +154,7 @@ class SimpleModeEngine {
         player.setPosition(randomX, randomY);
     }
 
-    resolveRound(): ExplosionResult[] {
+    resolveRound(): { explosions: ExplosionResult[], newDestroyedTiles: { x: number, y: number }[] } {
         const roundResults: ExplosionResult[] = [];
 
         this.roundLogs = [];
@@ -222,6 +223,8 @@ class SimpleModeEngine {
         }
 
         const livingPlayers = this.players.filter(p => p.isAlive);
+        const laserHits: { x: number; y: number }[] = [];
+
         if (this.roundNumber >= 4 || livingPlayers.length <= 3) {
 
             // GATHER ALL SAFE TILES
@@ -241,7 +244,6 @@ class SimpleModeEngine {
             }
 
             // PICK 5 RANDOM TILES (Or fewer, if we are running out of space!)
-            const laserHits: { x: number; y: number }[] = [];
             const tilesToDestroy = Math.min(5, safeTiles.length);
 
             for (let i = 0; i < tilesToDestroy; i++) {
@@ -261,7 +263,10 @@ class SimpleModeEngine {
         this.players.forEach(p => p.resetRound());
         this.currentThrowOrder = 0; // Reset the counter!
 
-        return roundResults;
+        return {
+            explosions: roundResults,
+            newDestroyedTiles: laserHits
+        }
     }
 
     addLog(type: LogActionType, data: any): ActionLog {
