@@ -110,6 +110,12 @@ export default (io: Server, socket: Socket) => {
                 case 'INVALID_COORDINATES':
                     if (callback) callback(ResponseUtil.error({ code: 400, errorType: 'INVALID_COORDINATES' }));
                     break;
+                case 'BOMB_ALREADY_THROWN':
+                    if (callback) callback(ResponseUtil.error({ code: 409, errorType: 'BOMB_ALREADY_THROWN', data: 'You have already locked in your bomb for this round' }));
+                    break;
+                case 'TILE_ALREADY_DESTROYED':
+                    if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'TILE_ALREADY_DESTROYED', data: 'Cannot bomb a destroyed tile' }));
+                    break;
                 default:
                     if (callback) callback(ResponseUtil.error({ code: 500, errorType: 'UNKNOWN_ERROR' }));
             }

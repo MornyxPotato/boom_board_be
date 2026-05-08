@@ -66,7 +66,7 @@ class GameService {
         room.game.state = 'process';
 
         // Math happens instantly
-        const { explosions: explosionResults, newDestroyedTiles } = room.game.resolveRound();
+        const { explosions: explosionResults, newDestroyedTiles, roundNumber } = room.game.resolveRound();
         const newLogs = room.game.roundLogs;
 
         // Broadcast EVERYTHING to Flutter
@@ -77,15 +77,16 @@ class GameService {
                 remainingPlayers: room.game.getPlayersList(),
                 destroyedTiles: room.game.destroyedTiles,
                 newLogs: newLogs,
+                roundNumber: roundNumber + 1,
             }
         }));
 
         const didLaserFire = newDestroyedTiles.length > 0;
 
-        const baseBufferMs = 2000;
+        const baseBufferMs = 300;
         const animationMs = explosionResults.length * 1500;
-        // Add 3.5 extra seconds if the orbital laser fired so Flutter can animate it!
-        const laserAnimationMs = didLaserFire ? 3500 : 0;
+        // Add extra second if the orbital laser fired so Flutter can animate it!
+        const laserAnimationMs = didLaserFire ? 1000 : 0;
         const totalDelayMs = baseBufferMs + animationMs + laserAnimationMs;
 
         // Look at the results to see if the game ended

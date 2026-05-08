@@ -63,7 +63,7 @@ export type GameState = 'lobby' | 'position' | 'attack' | 'process' | 'end';
 export type EngineEventType = 'PLAYER_READY' | 'PHASE_CHANGED_TO_ATTACK';
 
 export type SetPositionErrorType = 'PLAYER_NOT_FOUND' | 'POSITION_ALREADY_SET' | 'INVALID_COORDINATES' | 'WRONG_PHASE';
-export type SetBombErrorType = 'PLAYER_NOT_FOUND' | 'DEAD_PLAYER' | 'INVALID_COORDINATES' | 'WRONG_PHASE' | 'TILE_ALREADY_DESTROYED';
+export type SetBombErrorType = 'PLAYER_NOT_FOUND' | 'DEAD_PLAYER' | 'INVALID_COORDINATES' | 'WRONG_PHASE' | 'TILE_ALREADY_DESTROYED' | 'BOMB_ALREADY_THROWN';
 
 export interface EngineResult<TData = any, TError = string> {
     success: boolean;
@@ -154,7 +154,7 @@ class SimpleModeEngine {
         player.setPosition(randomX, randomY);
     }
 
-    resolveRound(): { explosions: ExplosionResult[], newDestroyedTiles: { x: number, y: number }[] } {
+    resolveRound(): { explosions: ExplosionResult[], newDestroyedTiles: { x: number, y: number }[], roundNumber: number } {
         const roundResults: ExplosionResult[] = [];
 
         this.roundLogs = [];
@@ -265,7 +265,8 @@ class SimpleModeEngine {
 
         return {
             explosions: roundResults,
-            newDestroyedTiles: laserHits
+            newDestroyedTiles: laserHits,
+            roundNumber: this.roundNumber,
         }
     }
 
@@ -307,6 +308,7 @@ class SimpleModeEngine {
 
         if (!player) return { success: false, error: 'PLAYER_NOT_FOUND' };
         if (!player.isAlive) return { success: false, error: 'DEAD_PLAYER' };
+        if (player.bombTarget !== null) return { success: false, error: 'BOMB_ALREADY_THROWN' };
         if (!this.board.isValidPosition(targetX, targetY)) return { success: false, error: 'INVALID_COORDINATES' };
         const isScorched = this.destroyedTiles.some(t => t.x === targetX && t.y === targetY);
         if (isScorched) return { success: false, error: 'TILE_ALREADY_DESTROYED' };
