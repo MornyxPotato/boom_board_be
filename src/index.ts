@@ -11,9 +11,11 @@ const server = http.createServer(app);
 // Initialize our socket architecture
 setupSockets(server);
 
+const PORT = process.env.PORT || 3000;
+
 // Check if this file is being run directly, or being imported by a test
 if (require.main === module) {
-  server.listen(3000, () => {
+  server.listen(PORT, () => {
     logger.info('Boom Board Server is running on port 3000');
   });
 }

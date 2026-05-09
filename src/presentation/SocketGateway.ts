@@ -7,7 +7,7 @@ import logger from '../utils/Logger';
 
 export default (server: HttpServer) => {
     // Initialize Socket.IO with our HTTP server
-    const io = new SocketIOServer(server, { cors: { origin: "*" } });
+    const io = new SocketIOServer(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
     io.on('connection', (socket: Socket) => {
         logger.debug(`Player connected: ${socket.id}`);
