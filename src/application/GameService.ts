@@ -35,6 +35,14 @@ class GameService {
             room.game.players.forEach(p => {
                 if (!p.hasPositioned && p.isAlive) {
                     room.game.forceRandomPosition(p.id);
+
+                    // Send a direct, private message to ONLY this player
+                    this.io.to(p.id).emit('forcedPosition', ResponseUtil.success({
+                        data: {
+                            x: p.x,
+                            y: p.y
+                        }
+                    }));
                 }
             });
 
