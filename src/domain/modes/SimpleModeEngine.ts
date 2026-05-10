@@ -348,6 +348,11 @@ class SimpleModeEngine {
             isDisconnected: p.isDisconnected,
         }));
     }
+
+    getWinnerPosition() {
+        const winnerPlayer = this.players.find(p => p.isAlive == true);
+        return { x: winnerPlayer?.x, y: winnerPlayer?.y };
+    }
 }
 
 export default SimpleModeEngine;
