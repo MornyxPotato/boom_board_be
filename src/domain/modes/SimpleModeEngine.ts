@@ -91,7 +91,7 @@ class SimpleModeEngine {
     constructor() {
         this.board = new Board(8, 8);
         this.players = [];
-        this.maxPlayers = 25;
+        this.maxPlayers = 64;
     }
 
     addPlayer(player: PlayerEntity): boolean {
