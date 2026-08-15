@@ -367,8 +367,14 @@ class SimpleModeEngine {
     }
 
     getWinnerPosition() {
-        const winnerPlayer = this.players.find(p => p.isAlive == true);
-        return { x: winnerPlayer?.x, y: winnerPlayer?.y };
+        // Only a living, positioned player has a real board position. When the
+        // game ends via disconnect there may be no living winner, or the sole
+        // survivor may not have positioned yet (position phase). Return null in
+        // those cases so the client can tolerate the absence instead of
+        // receiving {} or {x:null,y:null} and throwing while parsing.
+        const winnerPlayer = this.players.find(p => p.isAlive && p.hasPositioned);
+        if (!winnerPlayer) return null;
+        return { x: winnerPlayer.x, y: winnerPlayer.y };
     }
 }
 
