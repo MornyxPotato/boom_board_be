@@ -133,7 +133,7 @@ class GameService {
             room.game.state = 'end';
 
             this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
-                data: { ranking: room.game.getRanking() }
+                data: { ranking: room.game.getRanking(), winnerPosition: room.game.getWinnerPosition() }
             }));
             return;
         }

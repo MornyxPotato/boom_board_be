@@ -2,6 +2,19 @@ import logger from '../../utils/Logger';
 import Board from '../models/Board';
 import PlayerEntity from '../models/PlayerEntity';
 
+// The player-facing round by which the laser must have destroyed every empty
+// tile, leaving only tiles that hold living players. Tunable after playtesting.
+// This maps directly to the engine's `roundNumber` (perceived "Round N" is
+// resolved when `roundNumber === N`).
+//
+// Each round before this one destroys a share of the *remaining* empty tiles
+// so the count reaches exactly zero on the full-clear round:
+//   ceil(emptyTiles / (FULL_CLEAR_ROUND - roundNumber + 1))
+// This deplete-to-zero schedule is deliberate: a flat percentage per round
+// (e.g. "destroy 20%") never reaches zero, so it could not guarantee a full
+// clear by a fixed round.
+const FULL_CLEAR_ROUND = 5;
+
 export type LogActionType =
     | 'BOMB_EXPLODED'
     | 'PLAYER_ELIMINATED'
@@ -225,38 +238,42 @@ class SimpleModeEngine {
         const livingPlayers = this.players.filter(p => p.isAlive);
         const laserHits: { x: number; y: number }[] = [];
 
-        if (this.roundNumber >= 4 || livingPlayers.length <= 3) {
+        // The laser fires every round from round 1 (no gating condition).
 
-            // GATHER ALL SAFE TILES
-            const safeTiles: { x: number; y: number }[] = [];
+        // GATHER ALL EMPTY TILES (not destroyed, no living player on them)
+        const emptyTiles: { x: number; y: number }[] = [];
 
-            for (let x = 0; x < this.board.width; x++) {
-                for (let y = 0; y < this.board.height; y++) {
+        for (let x = 0; x < this.board.width; x++) {
+            for (let y = 0; y < this.board.height; y++) {
 
-                    const isDestroyed = this.destroyedTiles.some(t => t.x === x && t.y === y);
-                    const isOccupied = livingPlayers.some(p => p.hasPositioned && p.x === x && p.y === y);
+                const isDestroyed = this.destroyedTiles.some(t => t.x === x && t.y === y);
+                const isOccupied = livingPlayers.some(p => p.hasPositioned && p.x === x && p.y === y);
 
-                    // Only add tiles that aren't on fire, and don't have a living player on them
-                    if (!isDestroyed && !isOccupied) {
-                        safeTiles.push({ x, y });
-                    }
+                // Only add tiles that aren't on fire, and don't have a living player on them
+                if (!isDestroyed && !isOccupied) {
+                    emptyTiles.push({ x, y });
                 }
             }
+        }
 
-            // PICK 5 RANDOM TILES (Or fewer, if we are running out of space!)
-            const tilesToDestroy = Math.min(5, safeTiles.length);
+        // Destroy a share of the remaining empty tiles that ramps up to a full
+        // clear on the full-clear round. On/after that round, destroy them all
+        // so any tile freed by a death is lasered the same round.
+        const roundsUntilFullClear = FULL_CLEAR_ROUND - this.roundNumber + 1;
+        const tilesToDestroy = roundsUntilFullClear <= 1
+            ? emptyTiles.length
+            : Math.ceil(emptyTiles.length / roundsUntilFullClear);
 
-            for (let i = 0; i < tilesToDestroy; i++) {
-                const randomIndex = Math.floor(Math.random() * safeTiles.length);
-                laserHits.push(safeTiles[randomIndex]);
-                safeTiles.splice(randomIndex, 1); // Remove it so we don't pick it twice
-            }
+        for (let i = 0; i < tilesToDestroy; i++) {
+            const randomIndex = Math.floor(Math.random() * emptyTiles.length);
+            laserHits.push(emptyTiles[randomIndex]);
+            emptyTiles.splice(randomIndex, 1); // Remove it so we don't pick it twice
+        }
 
-            // FIRE THE LASER!
-            if (laserHits.length > 0) {
-                this.destroyedTiles.push(...laserHits);
-                this.addLog('ORBITAL_LASER_FIRED', { coordinates: laserHits } as OrbitalLaserData);
-            }
+        // FIRE THE LASER!
+        if (laserHits.length > 0) {
+            this.destroyedTiles.push(...laserHits);
+            this.addLog('ORBITAL_LASER_FIRED', { coordinates: laserHits } as OrbitalLaserData);
         }
 
         // Clean up for the next round
@@ -350,8 +367,14 @@ class SimpleModeEngine {
     }
 
     getWinnerPosition() {
-        const winnerPlayer = this.players.find(p => p.isAlive == true);
-        return { x: winnerPlayer?.x, y: winnerPlayer?.y };
+        // Only a living, positioned player has a real board position. When the
+        // game ends via disconnect there may be no living winner, or the sole
+        // survivor may not have positioned yet (position phase). Return null in
+        // those cases so the client can tolerate the absence instead of
+        // receiving {} or {x:null,y:null} and throwing while parsing.
+        const winnerPlayer = this.players.find(p => p.isAlive && p.hasPositioned);
+        if (!winnerPlayer) return null;
+        return { x: winnerPlayer.x, y: winnerPlayer.y };
     }
 }
 
