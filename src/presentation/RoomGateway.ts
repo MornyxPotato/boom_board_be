@@ -214,6 +214,47 @@ export default (io: Server, socket: Socket) => {
     });
 
     // ---------------------------------------------------
+    // Action: Re-read the room without rejoining it
+    // ---------------------------------------------------
+    // A client whose socket survived -- a phone backgrounded for a few seconds,
+    // a laptop lid closed and reopened -- has no rejoin to hang a snapshot off,
+    // but its phase clock has kept draining and its board may have moved on
+    // several rounds. This lets it re-read the authoritative view on its own,
+    // without the `playerReconnected` broadcast and progression re-check that
+    // a full joinRoom would fire at everyone else.
+    socket.on('requestSnapshot', (callback?: (res: ApiResponse) => void) => {
+        const playerId: string | undefined = socket.data.playerId;
+        const roomCode: string | undefined = socket.data.roomCode;
+
+        if (!playerId || !roomCode) {
+            if (callback) callback(ResponseUtil.badRequest({ errorType: 'PLAYER_IS_NOT_IN_A_ROOM' }));
+            return;
+        }
+
+        const room = RoomService.getRoom(roomCode);
+        if (!room) {
+            if (callback) callback(ResponseUtil.notFound({ errorType: 'ROOM_NOT_FOUND' }));
+            return;
+        }
+
+        // Being bound to the room code is not the same as being in the room.
+        // Only a seat -- on the board or in the stand -- earns the snapshot,
+        // which is private and would otherwise degrade into a full room view
+        // with an unexplained missing `you` block.
+        const isSpectator = room.game.spectators.some(s => s.id === playerId);
+        const isPlayer = room.game.players.some(p => p.id === playerId);
+
+        if (!isPlayer && !isSpectator) {
+            if (callback) callback(ResponseUtil.notFound({ errorType: 'PLAYER_NOT_FOUND' }));
+            return;
+        }
+
+        sendRoomSnapshot(roomCode, playerId, isSpectator);
+
+        if (callback) callback(ResponseUtil.success());
+    });
+
+    // ---------------------------------------------------
     // Action: User intentionally clicks "Leave Room"
     // ---------------------------------------------------
     socket.on('leaveRoom', (callback?: (res: ApiResponse) => void) => {
