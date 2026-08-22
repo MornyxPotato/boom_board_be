@@ -227,7 +227,7 @@ export default (io: Server, socket: Socket) => {
         const roomCode: string | undefined = socket.data.roomCode;
 
         if (!playerId || !roomCode) {
-            if (callback) callback(ResponseUtil.badRequest({ errorType: 'PLAYER_IS_NOT_IN_A_ROOM' }));
+            if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PLAYER_IS_NOT_IN_A_ROOM', data: 'You are not in a room' }));
             return;
         }
 
@@ -263,7 +263,7 @@ export default (io: Server, socket: Socket) => {
         if (!result.success) {
             switch (result.error) {
                 case 'PLAYER_IS_NOT_IN_A_ROOM':
-                    if (callback) callback(ResponseUtil.badRequest({ message: 'PLAYER_IS_NOT_IN_A_ROOM' }));
+                    if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PLAYER_IS_NOT_IN_A_ROOM', data: 'You are not in a room' }));
                     break;
                 case 'ROOM_NOT_FOUND':
                     if (callback) callback(ResponseUtil.notFound({ errorType: 'ROOM_NOT_FOUND' }));
@@ -278,19 +278,22 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
-        if (result.data && result.data.roomCode) {
-            socket.leave(result.data.roomCode);
-            if (socket.data.playerId) socket.leave(socket.data.playerId);
-            socket.data.playerId = undefined;
-            socket.data.roomCode = undefined;
+        // Unbind unconditionally, off our own binding rather than off the
+        // result. DELETE_ROOM comes back with no room code -- the room is gone
+        // -- so hanging the cleanup on that field left the last player out of a
+        // room still carrying its binding. That binding is now what every game
+        // action is attributed to, and room codes are four random characters
+        // that get reused, so a stale one also keeps handing a socket that left
+        // the broadcasts of whichever room later takes the code.
+        if (socket.data.roomCode) socket.leave(socket.data.roomCode);
+        if (socket.data.playerId) socket.leave(socket.data.playerId);
+        socket.data.playerId = undefined;
+        socket.data.roomCode = undefined;
 
-            if (callback) callback(ResponseUtil.success());
+        if (callback) callback(ResponseUtil.success());
 
-            broadcastPlayerRemoval(result.data);
-        } else {
-            // DELETE_ROOM: nothing left to broadcast to.
-            if (callback) callback(ResponseUtil.success());
-        }
+        // A no-op for DELETE_ROOM, which has nobody left to tell.
+        if (result.data) broadcastPlayerRemoval(result.data);
     });
 
     // ---------------------------------------------------
