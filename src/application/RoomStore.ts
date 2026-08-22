@@ -14,6 +14,12 @@ export interface Room {
     // timed phase is active. Only used to tell a (re)joining client how much of
     // the phase is left, since it arrives mid-countdown.
     phaseEndsAt: number | null;
+    // When every player in this room went offline, or null while at least one
+    // is still connected. A room with nobody in it keeps running its phase
+    // timers on purpose, so a returning player can pick the game back up --
+    // which also means nothing would ever free it. This is how long it has been
+    // sitting empty, and so when the reaper is allowed to collect it.
+    abandonedSince: number | null;
 }
 
 // What a live socket is currently bound to. Kept keyed by socket id because

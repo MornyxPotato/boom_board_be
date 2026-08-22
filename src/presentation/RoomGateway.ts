@@ -6,15 +6,38 @@ import logger from '../utils/Logger';
 
 export default (io: Server, socket: Socket) => {
 
-    // Binds this socket to an identity. `socket.join(playerId)` is what makes
+    // Drops every Socket.IO room this socket is subscribed to.
+    //
+    // Read off `socket.rooms`, which is Socket.IO's own record of the
+    // memberships and therefore cannot disagree with them. Deriving the list
+    // from a seat we remember separately is what let the two drift: a socket
+    // left subscribed to a room it is no longer in receives that room's
+    // `roundResolved` and `phaseChanged` on top of its current room's, which is
+    // how a brand-new room ends up jumping into an attack phase carrying a
+    // previous game's round number and roster. Room codes are four random
+    // characters and get reused, so a stale membership also hands a socket the
+    // broadcasts of whichever room later takes the code.
+    //
+    // `socket.id` is the socket's own private room and is not ours to leave.
+    // Snapshotted because `leave` mutates the set we are walking.
+    const leaveAllRooms = () => {
+        for (const room of [...socket.rooms]) {
+            if (room !== socket.id) socket.leave(room);
+        }
+    };
+
+    // Subscribes this socket to a seat. `socket.join(playerId)` is what makes
     // private messages survive reconnects: Socket.IO drops a dead socket from
     // its rooms automatically and the replacement re-joins the same
     // playerId-named room, so `io.to(playerId)` always reaches the live client.
+    //
+    // Leaves everything first, unconditionally: `socket.join` adds a membership,
+    // it does not replace one, so entering a second room while still subscribed
+    // to a first leaves the socket in both. One socket, one seat.
     const bindSocketToRoom = (playerId: string, roomCode: string) => {
+        leaveAllRooms();
         socket.join(roomCode);
         socket.join(playerId);
-        socket.data.playerId = playerId;
-        socket.data.roomCode = roomCode;
     };
 
     const sendRoomSnapshot = (roomCode: string, playerId: string, isSpectator: boolean) => {
@@ -34,9 +57,17 @@ export default (io: Server, socket: Socket) => {
                 data: {
                     leftPlayerId: playerId,
                     players: room.game.getPlayersList(),
-                    newHostId: room.hostId
+                    newHostId: room.hostId,
+                    newLogs: result.newLog ? [result.newLog] : null
                 },
             }));
+
+            // Mid-game the roster actually shrank, so unlike a disconnect this
+            // can be what wins the game -- and if it isn't, it can still be
+            // what completes "everyone left has acted".
+            if (result.wasMidGame && !GameService.checkGameEnd(roomCode)) {
+                GameService.checkGameProgression(roomCode);
+            }
         }
         else if (action === 'SPECTATOR_LEFT') {
             io.to(roomCode).emit('spectatorLeft', ResponseUtil.success({
@@ -75,7 +106,10 @@ export default (io: Server, socket: Socket) => {
         const result = RoomService.createRoom(socket.id, data.playerName, mode);
 
         if (result.success && result.data) {
+            // Resubscribe before announcing the seat we gave up, so we are not
+            // handed our own departure from a room we have already left.
             bindSocketToRoom(result.data.playerId, result.data.roomCode);
+            if (result.data.releasedSeat) broadcastPlayerRemoval(result.data.releasedSeat);
 
             if (callback) {
                 callback(ResponseUtil.success({
@@ -150,6 +184,7 @@ export default (io: Server, socket: Socket) => {
         }
 
         bindSocketToRoom(entry.playerId, roomCode);
+        if (entry.releasedSeat) broadcastPlayerRemoval(entry.releasedSeat);
 
         if (callback) {
             callback(ResponseUtil.success({
@@ -223,8 +258,9 @@ export default (io: Server, socket: Socket) => {
     // without the `playerReconnected` broadcast and progression re-check that
     // a full joinRoom would fire at everyone else.
     socket.on('requestSnapshot', (callback?: (res: ApiResponse) => void) => {
-        const playerId: string | undefined = socket.data.playerId;
-        const roomCode: string | undefined = socket.data.roomCode;
+        const binding = RoomService.getBinding(socket.id);
+        const playerId = binding?.playerId;
+        const roomCode = binding?.roomCode;
 
         if (!playerId || !roomCode) {
             if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PLAYER_IS_NOT_IN_A_ROOM', data: 'You are not in a room' }));
@@ -258,7 +294,13 @@ export default (io: Server, socket: Socket) => {
     // Action: User intentionally clicks "Leave Room"
     // ---------------------------------------------------
     socket.on('leaveRoom', (callback?: (res: ApiResponse) => void) => {
-        const result = RoomService.handleDisconnect(socket.id);
+        const result = RoomService.handleLeave(socket.id);
+
+        // Unconditionally, and before the error branch: whatever the verdict,
+        // this socket asked to be out of that room and must not keep receiving
+        // its broadcasts. Hanging this off a successful result used to leave a
+        // socket subscribed to a room it had just been told it was not in.
+        leaveAllRooms();
 
         if (!result.success) {
             switch (result.error) {
@@ -277,18 +319,6 @@ export default (io: Server, socket: Socket) => {
             }
             return;
         }
-
-        // Unbind unconditionally, off our own binding rather than off the
-        // result. DELETE_ROOM comes back with no room code -- the room is gone
-        // -- so hanging the cleanup on that field left the last player out of a
-        // room still carrying its binding. That binding is now what every game
-        // action is attributed to, and room codes are four random characters
-        // that get reused, so a stale one also keeps handing a socket that left
-        // the broadcasts of whichever room later takes the code.
-        if (socket.data.roomCode) socket.leave(socket.data.roomCode);
-        if (socket.data.playerId) socket.leave(socket.data.playerId);
-        socket.data.playerId = undefined;
-        socket.data.roomCode = undefined;
 
         if (callback) callback(ResponseUtil.success());
 

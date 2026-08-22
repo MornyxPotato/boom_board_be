@@ -6,18 +6,19 @@ import ResponseUtil, { ApiResponse } from '../utils/ResponseUtil';
 
 export default (io: Server, socket: Socket) => {
 
-    // Every game action is attributed to the stable playerId bound at join
-    // time, never to socket.id -- the socket id rotates on every reconnect.
-    const currentPlayerId = (): string | undefined => socket.data.playerId;
+    // Every game action is attributed to the seat this socket is sitting in,
+    // read from RoomService -- the one place that fact is recorded. Never to
+    // socket.id, which rotates on every reconnect, and never to a copy kept
+    // here, which is free to drift out of step with the seat it describes.
+    const currentPlayerId = (): string | undefined => RoomService.getBinding(socket.id)?.playerId;
 
-    // Same for the room: it is read off the binding made at join time, never
-    // from the payload. A client can only ever act on the one room it holds a
-    // seat in, so a `roomCode` in the request adds no information the server
-    // does not already have -- only a way for the client to be wrong (a lost
-    // route argument used to strand a player who was still seated here) or to
-    // aim an action at a room it never joined. Clients still send the field;
-    // it is ignored.
-    const currentRoomCode = (): string | undefined => socket.data.roomCode;
+    // Same for the room, and never from the payload. A client can only ever act
+    // on the one room it holds a seat in, so a `roomCode` in the request adds no
+    // information the server does not already have -- only a way for the client
+    // to be wrong (a lost route argument used to strand a player who was still
+    // seated here) or to aim an action at a room it never joined. Clients still
+    // send the field; it is ignored.
+    const currentRoomCode = (): string | undefined => RoomService.getBinding(socket.id)?.roomCode;
 
     // ---------------------------------------------------
     // Action: Host starts the game
