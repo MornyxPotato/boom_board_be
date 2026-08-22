@@ -230,7 +230,8 @@ export default (io: Server, socket: Socket) => {
                     socket.to(roomCode).emit('playerReconnected', ResponseUtil.success({
                         data: {
                             playerId: entry.playerId,
-                            players: entry.players
+                            players: entry.players,
+                            newLogs: entry.newLog ? [entry.newLog] : null
                         }
                     }));
                 }

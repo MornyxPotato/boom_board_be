@@ -1,6 +1,6 @@
 import PlayerEntity from '../domain/models/PlayerEntity';
 import SpectatorEntity from '../domain/models/SpectatorEntity';
-import SimpleModeEngine, { ActionLog, PlayerDisconnectedData, PlayerLeftData, PlayerModel, SpectatorModel } from '../domain/modes/SimpleModeEngine';
+import SimpleModeEngine, { ActionLog, PlayerDisconnectedData, PlayerLeftData, PlayerModel, PlayerReconnectedData, SpectatorModel } from '../domain/modes/SimpleModeEngine';
 import { generatePlayerId, generateSecret } from '../utils/Identity';
 import { GameMode, Room, SocketBinding, activeRooms, playerSocketTracker, socketTracker } from './RoomStore';
 
@@ -52,6 +52,11 @@ export interface JoinRoomResultData {
     // to come here. Never set on a RECONNECT -- reclaiming the seat you already
     // hold is not a move.
     releasedSeat?: DisconnectResultData;
+    // Set on RECONNECT when the seat was actually being held for an offline
+    // player, so the room's log can close the disconnect it opened. A client
+    // that never went offline (a second tab, a rejoin over a live socket) has
+    // nothing to announce.
+    newLog?: ActionLog;
 }
 
 // Why a seat was given up. The two are not interchangeable: a DROP is a client
@@ -246,7 +251,15 @@ class RoomService {
 
                     // Life status is untouched: a dead player comes back dead
                     // (and spectates in place), an alive one comes back alive.
+                    const wasOffline = existingPlayer?.isDisconnected ?? false;
                     if (existingPlayer) existingPlayer.setDisconnected(false);
+
+                    // Pairs 1:1 with the PLAYER_DISCONNECTED entry `vacateSeat`
+                    // wrote when the seat was held, so the log never leaves a
+                    // player offline for the rest of the game.
+                    const reconnectLog = wasOffline
+                        ? room.game.addLog('PLAYER_RECONNECTED', { playerName: trimmedName, playerId } as PlayerReconnectedData)
+                        : undefined;
 
                     const previousSocketId = this.bindSocket(socketId, playerId, roomCode);
                     const releasedSeat = this.releaseSeatIfMoved(previousSeat, playerId);
@@ -266,7 +279,8 @@ class RoomService {
                             isSpectator: !existingPlayer,
                             nameChanged,
                             previousSocketId,
-                            releasedSeat
+                            releasedSeat,
+                            newLog: reconnectLog
                         }
                     };
                 }
