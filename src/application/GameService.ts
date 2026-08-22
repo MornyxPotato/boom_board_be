@@ -1,6 +1,7 @@
 import { SetPositionErrorType, SetBombErrorType, EngineEventData, ActionLog, PlayerModel, SpectatorModel, GameState, RankingModel } from '../domain/modes/SimpleModeEngine';
 import logger from '../utils/Logger';
 import ResponseUtil from '../utils/ResponseUtil';
+import RoomService from './RoomService';
 import { Room, activeRooms } from './RoomStore';
 import { Server } from 'socket.io';
 
@@ -9,6 +10,13 @@ export type ResetGameErrorType = 'ROOM_NOT_FOUND' | 'WRONG_PHASE';
 
 export const PHASE_TIME_LIMIT_SECONDS = 30;
 const PHASE_TIME_LIMIT_MS = PHASE_TIME_LIMIT_SECONDS * 1000;
+
+// How long a room with nobody connected to it is kept before it is collected,
+// and how often we go looking. Generous on purpose: the whole point of holding
+// a seat through a drop is that a player can close a laptop lid, walk to
+// another room, and still find their game where they left it.
+const ABANDONED_ROOM_TTL_MS = 10 * 60 * 1000;
+const ROOM_REAPER_INTERVAL_MS = 60 * 1000;
 
 export interface GameResult<TData = any, TError = string> {
     success: boolean;
@@ -53,9 +61,55 @@ export interface RoomSnapshot {
 
 class GameService {
     private static io: Server;
+    private static roomReaper: NodeJS.Timeout | null = null;
 
     static init(ioServer: Server) {
         this.io = ioServer;
+        this.startRoomReaper();
+    }
+
+    // Rooms are not freed by the game ending -- the end screen is a phase you
+    // sit in, and a mid-game room whose players all dropped keeps running its
+    // phase timers so a returning player can pick it back up. Both of those are
+    // deliberate, and both mean an abandoned room would otherwise live for as
+    // long as the process does, burning a timer every 30 seconds forever.
+    //
+    // Deliberately not driven off the disconnect that empties a room: a room
+    // that has just lost its last client is exactly the one most likely to get
+    // it back. Sweeping on a clock instead lets it sit there and be reclaimed.
+    private static startRoomReaper() {
+        if (this.roomReaper) return;
+
+        this.roomReaper = setInterval(() => {
+            const now = Date.now();
+
+            for (const roomCode of Object.keys(activeRooms)) {
+                const room = activeRooms[roomCode];
+
+                // Spectators are dropped the moment their socket dies, so any
+                // still on the list are live clients and the room is in use.
+                const isAbandoned = room.game.spectators.length === 0
+                    && room.game.players.every(p => p.isDisconnected);
+
+                if (!isAbandoned) {
+                    room.abandonedSince = null;
+                    continue;
+                }
+
+                if (room.abandonedSince === null) {
+                    room.abandonedSince = now;
+                    continue;
+                }
+
+                if (now - room.abandonedSince >= ABANDONED_ROOM_TTL_MS) {
+                    logger.debug(`Reaping abandoned room ${roomCode}`);
+                    RoomService.deleteRoom(roomCode);
+                }
+            }
+        }, ROOM_REAPER_INTERVAL_MS);
+
+        // A pending sweep is not a reason to hold the process open.
+        this.roomReaper.unref?.();
     }
 
     // ==========================================
@@ -159,28 +213,63 @@ class GameService {
         const laserAnimationMs = didLaserFire ? 1000 : 0;
         const totalDelayMs = baseBufferMs + animationMs + laserAnimationMs;
 
-        // Look at the results to see if the game ended. Only real deaths shrink
-        // this count now -- a disconnect leaves the player alive on the board.
-        const livingPlayers = room.game.players.filter(p => p.isAlive);
+        // Whether that is another round or the end of the game is decided when
+        // the timer fires, not here: players can leave during the animation
+        // window, and it is the count they leave behind that settles it.
+        logger.debug(`Round resolved in ${roomCode}. ${room.game.players.filter(p => p.isAlive).length} alive, next step in ${totalDelayMs}ms`);
 
-        if (livingPlayers.length <= 1) {
-            // SCENARIO A: GAME OVER
-            // We use the same delay so the final explosion plays out before the Victory screen pops up!
+        room.processTimer = setTimeout(() => {
+            const stillHere = activeRooms[roomCode];
+            if (!stillHere) return;
 
-            room.processTimer = setTimeout(() => {
-                room.game.state = 'end';
-                this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
-                    data: { ranking: room.game.getRanking(), winnerPosition: room.game.getWinnerPosition() }
-                }));
-            }, totalDelayMs);
+            stillHere.processTimer = null;
 
-        } else {
-            // SCENARIO B: NEXT ROUND
-            // Everyone survived, start the next attack phase
-            room.processTimer = setTimeout(() => {
+            if (stillHere.game.players.filter(p => p.isAlive).length <= 1) {
+                // SCENARIO A: GAME OVER. The delay above is what let the final
+                // explosion play out before the victory screen pops up.
+                this.endGame(roomCode);
+            } else {
+                // SCENARIO B: NEXT ROUND
                 this.startAttackPhase(roomCode);
-            }, totalDelayMs);
+            }
+        }, totalDelayMs);
+    }
+
+    // Closes the game out and shows everyone the ranking. Idempotent: a room
+    // already in `end` has nothing left to decide.
+    private static endGame(roomCode: string) {
+        const room = activeRooms[roomCode];
+        if (!room || room.game.state === 'end') return;
+
+        this.clearPhaseTimer(room);
+        if (room.processTimer) {
+            clearTimeout(room.processTimer);
+            room.processTimer = null;
         }
+
+        room.game.state = 'end';
+        this.io.to(roomCode).emit('gameOver', ResponseUtil.success({
+            data: { ranking: room.game.getRanking(), winnerPosition: room.game.getWinnerPosition() }
+        }));
+    }
+
+    // Called after a player was *removed* from the board (they left), which is
+    // the one roster change that can genuinely end a game -- unlike a
+    // disconnect, the alive count really did drop. Returns whether it ended.
+    //
+    // `process` is left alone on purpose: its pending timer already re-counts
+    // the living when it fires, and cutting in front of it would drop the
+    // round's explosions mid-animation.
+    static checkGameEnd(roomCode: string): boolean {
+        const room = activeRooms[roomCode];
+        if (!room) return false;
+
+        const state = room.game.state;
+        if (state === 'lobby' || state === 'end' || state === 'process') return false;
+        if (room.game.players.filter(p => p.isAlive).length > 1) return false;
+
+        this.endGame(roomCode);
+        return true;
     }
 
     // Re-evaluates the early-exit gates after the set of connected-living

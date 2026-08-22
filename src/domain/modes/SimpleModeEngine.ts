@@ -20,6 +20,8 @@ export type LogActionType =
     | 'BOMB_EXPLODED'
     | 'PLAYER_ELIMINATED'
     | 'PLAYER_DISCONNECTED'
+    | 'PLAYER_RECONNECTED'
+    | 'PLAYER_LEFT'
     | 'ORBITAL_LASER_FIRED';
 
 export interface OrbitalLaserData {
@@ -44,6 +46,20 @@ export interface PlayerEliminatedData {
 
 // The Data Payloads for history log
 export interface PlayerDisconnectedData {
+    playerId: string;
+    playerName: string;
+}
+
+// The other half of a disconnect: the same player got their client back and is
+// answering for themselves again.
+export interface PlayerReconnectedData {
+    playerId: string;
+    playerName: string;
+}
+
+// A player who gave up their seat mid-game. Same shape as a disconnect, but a
+// very different thing to read in the log: they are off the board for good.
+export interface PlayerLeftData {
     playerId: string;
     playerName: string;
 }
