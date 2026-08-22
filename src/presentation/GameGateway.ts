@@ -1,10 +1,14 @@
 import { Server, Socket } from 'socket.io';
 import RoomService from '../application/RoomService';
-import GameService from '../application/GameService';
+import GameService, { PHASE_TIME_LIMIT_SECONDS } from '../application/GameService';
 import ResponseUtil, { ApiResponse } from '../utils/ResponseUtil';
 
 
 export default (io: Server, socket: Socket) => {
+
+    // Every game action is attributed to the stable playerId bound at join
+    // time, never to socket.id -- the socket id rotates on every reconnect.
+    const currentPlayerId = (): string | undefined => socket.data.playerId;
 
     // ---------------------------------------------------
     // Action: Host starts the game
@@ -23,7 +27,7 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
-        if (room.hostId !== socket.id) {
+        if (!currentPlayerId() || room.hostId !== currentPlayerId()) {
             if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PERMISSION_DENIED', data: 'Only a host can start game' }));
             return;
         }
@@ -42,7 +46,7 @@ export default (io: Server, socket: Socket) => {
                 boardSize: { width: room.game.board.width, height: room.game.board.height },
                 state: room.game.state,
                 destroyedTiles: room.game.destroyedTiles,
-                timeLimit: 30
+                timeLimit: PHASE_TIME_LIMIT_SECONDS
             }
         }));
     });
@@ -56,8 +60,14 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
+        const playerId = currentPlayerId();
+        if (!playerId) {
+            if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PLAYER_NOT_FOUND', data: 'You are not in a room' }));
+            return;
+        }
+
         const roomCode = data.roomCode.toUpperCase();
-        const result = GameService.handleSetPosition(roomCode, socket.id, data.x, data.y);
+        const result = GameService.handleSetPosition(roomCode, playerId, data.x, data.y);
 
         if (!result.success) {
             switch (result.error) {
@@ -82,7 +92,7 @@ export default (io: Server, socket: Socket) => {
         if (callback) callback(ResponseUtil.success());
 
         if (result.data?.event === 'PLAYER_READY') {
-            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id } }));
+            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId } }));
         }
     });
 
@@ -92,9 +102,15 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
+        const playerId = currentPlayerId();
+        if (!playerId) {
+            if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PLAYER_NOT_FOUND', data: 'You are not in a room' }));
+            return;
+        }
+
         const roomCode = data.roomCode.toUpperCase();
 
-        const result = GameService.handleThrowBomb(roomCode, socket.id, data.x, data.y);
+        const result = GameService.handleThrowBomb(roomCode, playerId, data.x, data.y);
 
         if (!result.success) {
             switch (result.error) {
@@ -125,7 +141,7 @@ export default (io: Server, socket: Socket) => {
         if (callback) callback(ResponseUtil.success({ data: { throwOrder: result.data?.throwOrder } }));
 
         if (result.data?.event === 'PLAYER_READY') {
-            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId: socket.id, throwOrder: result.data?.throwOrder } }));
+            socket.to(roomCode).emit('playerReady', ResponseUtil.success({ data: { playerId, throwOrder: result.data?.throwOrder } }));
         }
     });
 
@@ -146,14 +162,14 @@ export default (io: Server, socket: Socket) => {
             return;
         }
 
-        if (room.hostId !== socket.id) {
+        if (!currentPlayerId() || room.hostId !== currentPlayerId()) {
             if (callback) callback(ResponseUtil.error({ code: 403, errorType: 'PERMISSION_DENIED', data: 'Only the host can reset the game' }));
             return;
         }
 
         const result = GameService.handleResetGame(roomCode);
 
-        if (!result.success) {
+        if (!result.success || !result.data) {
             switch (result.error) {
                 case 'ROOM_NOT_FOUND':
                     if (callback) callback(ResponseUtil.error({ code: 404, errorType: result.error }));
@@ -173,7 +189,11 @@ export default (io: Server, socket: Socket) => {
 
         io.to(roomCode).emit('gameReset', ResponseUtil.success({
             data: {
-                players: room.game.getPlayersList() // Send the fresh, fully alive player list
+                // Fresh, fully alive roster: still-disconnected players pruned,
+                // last game's spectators promoted in.
+                players: result.data.players,
+                spectators: result.data.spectators,
+                newHostId: result.data.hostId
             }
         }));
     });

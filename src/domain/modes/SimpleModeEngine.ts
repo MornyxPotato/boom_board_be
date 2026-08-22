@@ -1,6 +1,7 @@
 import logger from '../../utils/Logger';
 import Board from '../models/Board';
 import PlayerEntity from '../models/PlayerEntity';
+import SpectatorEntity from '../models/SpectatorEntity';
 
 // The player-facing round by which the laser must have destroyed every empty
 // tile, leaving only tiles that hold living players. Tunable after playtesting.
@@ -64,6 +65,21 @@ export interface PlayerModel {
     throwOrder: number | null;
 }
 
+// The public shape of a spectator. Deliberately minimal, and deliberately
+// without `secret`.
+export interface SpectatorModel {
+    id: string;
+    name: string;
+}
+
+export interface RankingModel {
+    rank: number;
+    id: string;
+    name: string;
+    isAlive: boolean;
+    isDisconnected: boolean;
+}
+
 export interface ExplosionResult {
     bomberId: string;
     victimId?: string;
@@ -93,7 +109,9 @@ class SimpleModeEngine {
     state: GameState = 'lobby';
     board: Board;
     players: PlayerEntity[];
+    spectators: SpectatorEntity[];
     maxPlayers: number;
+    maxSpectators: number;
     currentThrowOrder: number = 0;
     deathCounter: number = 0;
     roundLogs: ActionLog[] = [];
@@ -104,7 +122,9 @@ class SimpleModeEngine {
     constructor() {
         this.board = new Board(8, 8);
         this.players = [];
+        this.spectators = [];
         this.maxPlayers = 64;
+        this.maxSpectators = 64;
     }
 
     addPlayer(player: PlayerEntity): boolean {
@@ -113,6 +133,30 @@ class SimpleModeEngine {
         }
         this.players.push(player);
         return true;
+    }
+
+    addSpectator(spectator: SpectatorEntity): boolean {
+        if (this.spectators.length >= this.maxSpectators) {
+            return false;
+        }
+        this.spectators.push(spectator);
+        return true;
+    }
+
+    removeSpectator(spectatorId: string): boolean {
+        const index = this.spectators.findIndex(s => s.id === spectatorId);
+        if (index === -1) return false;
+        this.spectators.splice(index, 1);
+        return true;
+    }
+
+    // Everyone who sat out this game joins the next one. Called on the
+    // end -> lobby reset, after disconnected players have been pruned.
+    promoteSpectatorsToPlayers(): void {
+        for (const spectator of this.spectators) {
+            this.addPlayer(new PlayerEntity(spectator.id, spectator.name, spectator.secret));
+        }
+        this.spectators = [];
     }
 
     getPlayersList(): PlayerModel[] {
@@ -126,15 +170,32 @@ class SimpleModeEngine {
         }));
     }
 
+    getSpectatorsList(): SpectatorModel[] {
+        return this.spectators.map(s => ({ id: s.id, name: s.name }));
+    }
+
+    // Players who are both on the board and currently holding a client. These
+    // are the only ones a phase can wait for -- a disconnected player will
+    // never act, so counting them would strand the phase on its full timer.
+    connectedLivingPlayers(): PlayerEntity[] {
+        return this.players.filter(p => p.isAlive && !p.isDisconnected);
+    }
+
+    // Both gates are a guarded early-exit: the phase ends ahead of its timer
+    // only when there is someone left to wait for AND they have all acted.
+    // With nobody connected the gate stays false and the 30s timer alone drives
+    // the game, which is what lets a fully-abandoned room keep ticking until
+    // someone reconnects.
     haveAllLivingPlayersThrown(): boolean {
-        const livingPlayers = this.players.filter(p => p.isAlive);
-        if (livingPlayers.length === 0) return false;
-        return livingPlayers.every(p => p.bombTarget !== null);
+        const waitingOn = this.connectedLivingPlayers();
+        if (waitingOn.length === 0) return false;
+        return waitingOn.every(p => p.bombTarget !== null);
     }
 
     haveAllPlayersPositioned(): boolean {
-        if (this.players.length === 0) return false;
-        return this.players.every(p => p.hasPositioned);
+        const waitingOn = this.connectedLivingPlayers();
+        if (waitingOn.length === 0) return false;
+        return waitingOn.every(p => p.hasPositioned);
     }
 
     forceRandomPosition(playerId: string): void {
@@ -311,8 +372,10 @@ class SimpleModeEngine {
         if (!this.board.isValidPosition(startX, startY)) return { success: false, error: 'INVALID_COORDINATES' };
 
         player.setPosition(startX, startY);
+        // The engine only reports that the gate opened. GameService owns the
+        // actual transition, because moving to attack first has to force-position
+        // the disconnected-alive players (and tell them about it).
         if (this.haveAllPlayersPositioned()) {
-            this.state = 'attack';
             return { success: true, data: { event: 'PHASE_CHANGED_TO_ATTACK' } };
         }
 
@@ -346,7 +409,7 @@ class SimpleModeEngine {
         return { success: true };
     }
 
-    getRanking() {
+    getRanking(): RankingModel[] {
         // Sort rules: 
         // 1. Alive players at the top
         // 2. Dead players sorted by highest deathOrder (died last) to lowest (died first)
